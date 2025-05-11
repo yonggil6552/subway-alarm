@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>지하철 도착 알림</title>
+</head>
+<body>
+  <h1>🚇 실시간 지하철 도착 알림</h1>
+
+  <label for="stationInput">도착 알림을 받을 역 이름 입력:</label>
+  <input type="text" id="stationInput" placeholder="예: 신도림">
+  <button onclick="startMonitoring()">알림 시작</button>
+
+  <p id="status"></p>
+
+  <h2>📍 현재 열차 위치</h2>
+  <ul id="stationList" style="line-height: 2; font-size: 18px; list-style: none; padding-left: 0;"></ul>
+
+  <script>
+    let targetStation = "";
+    let alarmed = false;
+
+    // 알람 소리 미리 생성
+    const alarmSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+// 또는 MP3
+// const alarmSound = new Audio('https://www.soundjay.com/button/sounds/beep-07.mp3');
+
+    alarmSound.volume = 1.0;
+
+    // 표시할 1호선 주요역 리스트 (원하시면 더 추가 가능)
+    const stationNames = ["서울역", "시청", "종각", "종로3가", "종로5가", "동대문", "회기", "청량리"];
+
+    async function fetchSubwayData() {
+      const API_KEY = "4c4265476973796737364a51757a47"; // 본인 키 사용
+      const URL = `http://swopenAPI.seoul.go.kr/api/subway/4c4265476973796737364a51757a47/json/realtimePosition/0/5/1호선`;
+
+      try {
+        const res = await fetch(URL);
+        const data = await res.json();
+
+        if (data.realtimePositionList) {
+          const trainList = data.realtimePositionList;
+          document.getElementById("status").innerText =
+            `실시간 열차 수: ${trainList.length}`;
+
+          // 콘솔에 열차 위치 출력
+          for (let train of trainList) {
+            console.log(`🚇 [열차] 현재역: ${train.statnNm}, 상태: ${train.trainSttus}, 방면: ${train.statnTnm}`);
+          }
+
+          // 현재 열차 위치 목록 표시
+          updateStationList(trainList);
+
+          // 도착 알림 조건 검사
+          for (let train of trainList) {
+            if (
+              train.statnNm === targetStation &&
+              (train.trainSttus === "0" || train.trainSttus === "1")
+            ) {
+              if (!alarmed) {
+                alert(`🚨 열차가 "${targetStation}"역에 도착하거나 진입 중입니다!`);
+                alarmSound.currentTime = 0;
+                alarmSound.play().catch(err => {
+                  console.warn("🔇 알람 소리 재생 실패:", err);
+                });
+                alarmed = true;
+              }
+              break;
+            }
+          }
+        } else {
+          document.getElementById("status").innerText = "열차 정보 없음";
+        }
+      } catch (e) {
+        console.error("API 호출 오류:", e);
+        document.getElementById("status").innerText = "API 오류 발생";
+      }
+    }
+
+    function updateStationList(trainList) {
+      const ul = document.getElementById("stationList");
+      ul.innerHTML = ""; // 초기화
+
+      for (const station of stationNames) {
+        const isTrainHere = trainList.some(train =>
+          train.statnNm === station &&
+          (train.trainSttus === "0" || train.trainSttus === "1")
+        );
+
+        const li = document.createElement("li");
+        li.textContent = isTrainHere ? `🚇 ${station}` : `▫️ ${station}`;
+        ul.appendChild(li);
+      }
+    }
+
+    function startMonitoring() {
+      targetStation = document.getElementById("stationInput").value.trim();
+      if (!targetStation) {
+        alert("역 이름을 입력해주세요!");
+        return;
+      }
+
+      alarmed = false;
+      fetchSubwayData(); // 첫 실행
+      setInterval(fetchSubwayData, 10000); // 10초마다 갱신
+    }
+  </script>
+</body>
+</html>
